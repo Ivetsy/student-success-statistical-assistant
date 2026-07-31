@@ -1,0 +1,1045 @@
+---
+title: "Student Success Statistical Assistant"
+author: "Ivetsy Morejon"
+format:
+  html:
+    toc: true
+    number-sections: true
+  pdf:
+    toc: true
+    number-sections: true
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+# Introduction
+
+## Industry
+
+This project focuses on the higher-education industry.
+
+## Intended User
+
+The intended user is a college student success coordinator or academic advisor.
+
+## Problem
+
+Colleges need to understand patterns associated with student dropout and academic success so they can identify areas where students may benefit from earlier academic, financial, or advising support.
+
+## Decision Supported
+
+The statistical assistant supports decisions involving:
+
+- Academic advising
+- Tutoring and academic support
+- Financial-support review
+- Program-level review
+- Student-retention planning
+- Data readiness and reliability
+
+The results are intended to guide further investigation. They should not be used to automatically label students, deny services, or punish academic programs.
+
+## Project Goal
+
+The goal is to create a reproducible statistical assistant that uses R and Agent Skills to examine student outcomes, validate requests, create useful results, and explain findings in plain language.
+
+## Selected Implementation Level
+
+This project uses **Level 1: Quarto Statistical Report**.
+
+Level 1 was selected because the project focuses on R, statistics, reproducibility, interpretation, validation, and Agent Skills. A separate application programming interface or interactive application is not required.
+
+# Dataset
+
+## Source
+
+The project uses the UCI Machine Learning Repository dataset titled **Predict Students' Dropout and Academic Success**.
+
+One row represents one college student.
+
+The dataset contains:
+
+- 4,424 observations
+- 37 variables
+- 1,421 Dropout outcomes
+- 794 Enrolled outcomes
+- 2,209 Graduate outcomes
+
+## Main Variables
+
+Important variables include:
+
+- `target`
+- `course`
+- `tuition_fees_up_to_date`
+- `debtor`
+- `scholarship_holder`
+- `admission_grade`
+- `age_at_enrollment`
+- `curricular_units_1st_sem_enrolled`
+- `curricular_units_1st_sem_approved`
+- `curricular_units_1st_sem_grade`
+
+## Data Import
+
+```{r}
+library(tidyverse)
+library(janitor)
+
+students <- read_delim(
+  "data.csv",
+  delim = ";",
+  show_col_types = FALSE
+) |>
+  clean_names()
+
+dim(students)
+table(students$target)
+```
+
+## Data Preparation and Quality
+
+The variable names were standardized using `clean_names()`.
+
+The dataset was checked for missing values, duplicate rows, invalid categories, negative academic values, and logical inconsistencies.
+
+```{r}
+missing_values <- colSums(is.na(students))
+duplicate_rows <- sum(duplicated(students))
+
+sum(missing_values)
+duplicate_rows
+```
+
+The dataset contained zero missing values and zero completely duplicated rows.
+
+Unusual zero values were investigated rather than automatically removed.
+
+# Explore Skill
+
+## User Question
+
+What does the distribution of first-semester grades look like?
+
+## Method
+
+The Explore skill uses descriptive statistics, a histogram, a boxplot, and an investigation of zero-grade records.
+
+The selected variable is:
+
+`curricular_units_1st_sem_grade`
+
+```{r}
+explore_summary <- students |>
+  summarise(
+    observations = n(),
+    missing_values =
+      sum(is.na(curricular_units_1st_sem_grade)),
+    mean_grade =
+      mean(curricular_units_1st_sem_grade, na.rm = TRUE),
+    median_grade =
+      median(curricular_units_1st_sem_grade, na.rm = TRUE),
+    standard_deviation =
+      sd(curricular_units_1st_sem_grade, na.rm = TRUE),
+    minimum =
+      min(curricular_units_1st_sem_grade, na.rm = TRUE),
+    first_quartile =
+      quantile(
+        curricular_units_1st_sem_grade,
+        0.25,
+        na.rm = TRUE
+      ),
+    third_quartile =
+      quantile(
+        curricular_units_1st_sem_grade,
+        0.75,
+        na.rm = TRUE
+      ),
+    maximum =
+      max(curricular_units_1st_sem_grade, na.rm = TRUE)
+  )
+
+explore_summary
+```
+
+The results showed:
+
+- Mean: approximately 10.64
+- Median: approximately 12.29
+- Standard deviation: approximately 4.84
+- Minimum: 0
+- First quartile: 11
+- Third quartile: 13.40
+- Maximum: 18.88
+
+## Visualizations
+
+```{r}
+ggplot(
+  students,
+  aes(x = curricular_units_1st_sem_grade)
+) +
+  geom_histogram(bins = 30) +
+  labs(
+    title = "Distribution of First-Semester Grades",
+    x = "First-Semester Grade",
+    y = "Number of Students"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(
+  students,
+  aes(y = curricular_units_1st_sem_grade)
+) +
+  geom_boxplot() +
+  labs(
+    title = "First-Semester Grade Boxplot",
+    y = "First-Semester Grade"
+  ) +
+  theme_minimal()
+```
+
+## Zero-Grade Investigation
+
+```{r}
+zero_grade_summary <- students |>
+  filter(curricular_units_1st_sem_grade == 0) |>
+  summarise(
+    zero_grade_count = n(),
+    zero_grade_percentage =
+      n() / nrow(students) * 100,
+    average_units_enrolled =
+      mean(curricular_units_1st_sem_enrolled),
+    average_units_approved =
+      mean(curricular_units_1st_sem_approved),
+    average_without_evaluations =
+      mean(curricular_units_1st_sem_without_evaluations)
+  )
+
+zero_grade_summary
+```
+
+There were 718 zero-grade records, representing approximately 16.23% of the dataset.
+
+All 718 students with a zero first-semester grade approved zero first-semester units. These values appear to contain meaningful academic information and were not removed.
+
+## Validation
+
+The skill confirms that the selected variable exists and is numeric before calculating numeric summaries.
+
+It also counts missing values and investigates unusual values instead of silently deleting them.
+
+## Interpretation
+
+The grade distribution contains many zero values, which pull the mean below the median.
+
+Most nonzero grades are concentrated around the middle and upper part of the observed range.
+
+The results describe the distribution but do not explain why students received particular grades.
+
+## Limitation
+
+This is a descriptive analysis. It does not establish that first-semester grades caused later student outcomes.
+
+# Compare Skill
+
+## User Question
+
+Does the dropout percentage differ according to whether tuition fees are up to date?
+
+## Variables
+
+The grouping variable is:
+
+`tuition_fees_up_to_date`
+
+The outcome was prepared as:
+
+- Dropout
+- Not Dropout
+
+Enrolled and Graduate outcomes were combined into the Not Dropout category.
+
+## Method
+
+The analysis calculated group counts, dropout percentages, the difference in proportions, a 95% confidence interval, and a two-sample proportion test.
+
+```{r}
+compare_data <- students |>
+  mutate(
+    dropout_status = if_else(
+      target == "Dropout",
+      "Dropout",
+      "Not Dropout"
+    ),
+    tuition_status = if_else(
+      tuition_fees_up_to_date == 1,
+      "Up to date",
+      "Not up to date"
+    )
+  )
+
+compare_summary <- compare_data |>
+  group_by(tuition_status) |>
+  summarise(
+    sample_size = n(),
+    dropout_count =
+      sum(dropout_status == "Dropout"),
+    not_dropout_count =
+      sum(dropout_status == "Not Dropout"),
+    dropout_percentage =
+      mean(dropout_status == "Dropout") * 100,
+    .groups = "drop"
+  )
+
+compare_summary
+```
+
+Students whose tuition was not up to date had an observed dropout percentage of approximately 86.55%.
+
+Students whose tuition was up to date had an observed dropout percentage of approximately 24.74%.
+
+```{r}
+dropout_counts <- c(
+  sum(
+    compare_data$dropout_status == "Dropout" &
+      compare_data$tuition_status == "Not up to date"
+  ),
+  sum(
+    compare_data$dropout_status == "Dropout" &
+      compare_data$tuition_status == "Up to date"
+  )
+)
+
+group_sizes <- c(
+  sum(compare_data$tuition_status == "Not up to date"),
+  sum(compare_data$tuition_status == "Up to date")
+)
+
+comparison_test <- prop.test(
+  x = dropout_counts,
+  n = group_sizes,
+  correct = FALSE
+)
+
+comparison_test
+```
+
+The estimated difference was approximately 61.81 percentage points.
+
+The 95% confidence interval for the difference was approximately 58.60 to 65.02 percentage points.
+
+The proportion test produced a p-value below 2.2 × 10^-16.
+
+## Validation
+
+The grouping variable must contain exactly two valid groups.
+
+Both groups must contain enough observations, and the outcome values must be valid before the test is performed.
+
+## Interpretation
+
+There was a large and statistically significant association between tuition-payment status and dropout status.
+
+Students whose tuition fees were not up to date had a substantially higher observed dropout percentage.
+
+This result may support further investigation of financial barriers and student-support options.
+
+## Limitation
+
+This observational analysis identifies an association. It does not prove that unpaid tuition caused students to drop out.
+
+Combining Enrolled and Graduate students into one Not Dropout group also simplifies the original three-category outcome.
+
+# Model Skill
+
+## User Question
+
+Which factors are associated with whether a student drops out or graduates?
+
+## Outcome
+
+The binary model outcome was coded as:
+
+- Graduate = 0
+- Dropout = 1
+
+Students whose outcome was Enrolled were excluded from this model.
+
+## Predictors
+
+The model included:
+
+- First-semester grade
+- First-semester approved units
+- Tuition-fee status
+- Debtor status
+- Scholarship-holder status
+- Admission grade
+- Age at enrollment
+
+## Model Type
+
+A binary logistic regression model was used.
+
+```{r}
+model_data <- students |>
+  filter(target %in% c("Dropout", "Graduate")) |>
+  mutate(
+    dropout_outcome =
+      if_else(target == "Dropout", 1, 0),
+    tuition_fees_up_to_date =
+      factor(tuition_fees_up_to_date),
+    debtor = factor(debtor),
+    scholarship_holder =
+      factor(scholarship_holder)
+  ) |>
+  select(
+    dropout_outcome,
+    curricular_units_1st_sem_grade,
+    curricular_units_1st_sem_approved,
+    tuition_fees_up_to_date,
+    debtor,
+    scholarship_holder,
+    admission_grade,
+    age_at_enrollment
+  ) |>
+  drop_na()
+
+set.seed(123)
+
+training_rows <- sample(
+  seq_len(nrow(model_data)),
+  size = floor(0.80 * nrow(model_data))
+)
+
+training_data <- model_data[training_rows, ]
+test_data <- model_data[-training_rows, ]
+
+dropout_model <- glm(
+  dropout_outcome ~
+    curricular_units_1st_sem_grade +
+    curricular_units_1st_sem_approved +
+    tuition_fees_up_to_date +
+    debtor +
+    scholarship_holder +
+    admission_grade +
+    age_at_enrollment,
+  data = training_data,
+  family = binomial()
+)
+
+summary(dropout_model)
+```
+
+## Odds Ratios
+
+```{r}
+odds_ratios <- exp(coef(dropout_model))
+odds_ratios
+```
+
+The model results indicated:
+
+- Higher first-semester grades were associated with lower odds of dropout.
+- More approved first-semester units were associated with lower odds of dropout.
+- Having tuition fees up to date was associated with substantially lower odds of dropout.
+- Debtor status was associated with higher odds of dropout.
+- Scholarship-holder status was associated with lower odds of dropout.
+- Higher admission grades were associated with slightly lower odds of dropout.
+- Greater age at enrollment was associated with higher estimated odds of dropout.
+
+## Evaluation
+
+```{r}
+predicted_probability <- predict(
+  dropout_model,
+  newdata = test_data,
+  type = "response"
+)
+
+predicted_class <- if_else(
+  predicted_probability >= 0.50,
+  1,
+  0
+)
+
+confusion_matrix <- table(
+  Predicted = predicted_class,
+  Actual = test_data$dropout_outcome
+)
+
+confusion_matrix
+```
+
+```{r}
+true_negative <- confusion_matrix["0", "0"]
+false_negative <- confusion_matrix["0", "1"]
+false_positive <- confusion_matrix["1", "0"]
+true_positive <- confusion_matrix["1", "1"]
+
+accuracy <- (
+  true_positive + true_negative
+) / sum(confusion_matrix)
+
+sensitivity <- true_positive / (
+  true_positive + false_negative
+)
+
+specificity <- true_negative / (
+  true_negative + false_positive
+)
+
+model_metrics <- tibble(
+  accuracy = accuracy,
+  sensitivity = sensitivity,
+  specificity = specificity
+)
+
+model_metrics
+```
+
+The test-set results were approximately:
+
+- Accuracy: 85.81%
+- Sensitivity: 73.45%
+- Specificity: 93.35%
+
+The model was better at identifying graduates than dropouts.
+
+## Validation
+
+The model skill confirms that:
+
+- The outcome contains exactly two categories.
+- All required predictors exist.
+- Required values are available.
+- The selected model is appropriate for a binary outcome.
+- Prediction requests contain all required inputs.
+
+## Interpretation
+
+The model identifies broad factors associated with Dropout versus Graduate outcomes.
+
+It may support early review and outreach, but it should not be used to make automatic decisions about individual students.
+
+## Limitation
+
+The model excludes Enrolled students and may make classification errors.
+
+The results are associative and do not prove that any predictor caused dropout.
+
+# Additional Skill 1: Academic Progress Analysis
+
+## User Question
+
+How does first-semester academic progress differ among students who dropped out, remained enrolled, or graduated?
+
+## Method
+
+An approval-rate variable was created using approved units divided by enrolled units.
+
+Rates were not calculated when enrolled units equaled zero.
+
+```{r}
+academic_progress <- students |>
+  mutate(
+    approval_rate = if_else(
+      curricular_units_1st_sem_enrolled > 0,
+      curricular_units_1st_sem_approved /
+        curricular_units_1st_sem_enrolled,
+      NA_real_
+    )
+  )
+
+academic_summary <- academic_progress |>
+  group_by(target) |>
+  summarise(
+    sample_size = n(),
+    mean_grade =
+      mean(curricular_units_1st_sem_grade, na.rm = TRUE),
+    median_grade =
+      median(curricular_units_1st_sem_grade, na.rm = TRUE),
+    mean_units_enrolled =
+      mean(curricular_units_1st_sem_enrolled, na.rm = TRUE),
+    mean_units_approved =
+      mean(curricular_units_1st_sem_approved, na.rm = TRUE),
+    mean_approval_rate =
+      mean(approval_rate, na.rm = TRUE) * 100,
+    median_approval_rate =
+      median(approval_rate, na.rm = TRUE) * 100,
+    .groups = "drop"
+  )
+
+academic_summary
+```
+
+The average approval rates were approximately:
+
+- Dropout: 40.60%
+- Enrolled: 71.35%
+- Graduate: 93.50%
+
+## Visualizations
+
+```{r}
+ggplot(
+  academic_progress,
+  aes(
+    x = target,
+    y = curricular_units_1st_sem_grade
+  )
+) +
+  geom_boxplot() +
+  labs(
+    title = "First-Semester Grades by Student Outcome",
+    x = "Student Outcome",
+    y = "First-Semester Grade"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(
+  academic_summary,
+  aes(
+    x = target,
+    y = mean_approval_rate
+  )
+) +
+  geom_col() +
+  labs(
+    title = "Average First-Semester Approval Rate by Outcome",
+    x = "Student Outcome",
+    y = "Average Approval Rate (%)"
+  ) +
+  theme_minimal()
+```
+
+## Statistical Test
+
+```{r}
+grade_test <- kruskal.test(
+  curricular_units_1st_sem_grade ~ target,
+  data = academic_progress
+)
+
+grade_test
+```
+
+The Kruskal-Wallis test produced:
+
+- Chi-squared statistic: 1094.2
+- Degrees of freedom: 2
+- P-value: below 2.2 × 10^-16
+
+## Validation
+
+The analysis found:
+
+- Zero negative enrolled-unit values
+- Zero negative approved-unit values
+- Zero cases where approved units exceeded enrolled units
+- Zero approval rates outside the range of 0 to 1
+- 180 missing approval rates caused by zero enrolled units
+
+## Interpretation
+
+Graduate students showed the strongest first-semester academic progress.
+
+Enrolled students were in the middle, while Dropout students had the lowest average grades, approved units, and approval rates.
+
+## Limitation
+
+This retrospective analysis does not prove that first-semester academic performance caused later outcomes.
+
+# Additional Skill 2: Program Support Prioritization
+
+## User Question
+
+Which academic programs have the highest observed dropout percentages and may require further review?
+
+## Method
+
+The analysis calculated program sample sizes, outcome counts, outcome percentages, sample-size warnings, rankings, and approximate 95% confidence intervals.
+
+```{r}
+program_summary <- students |>
+  group_by(course) |>
+  summarise(
+    sample_size = n(),
+    dropout_count =
+      sum(target == "Dropout"),
+    enrolled_count =
+      sum(target == "Enrolled"),
+    graduate_count =
+      sum(target == "Graduate"),
+    dropout_percentage =
+      mean(target == "Dropout") * 100,
+    enrolled_percentage =
+      mean(target == "Enrolled") * 100,
+    graduate_percentage =
+      mean(target == "Graduate") * 100,
+    .groups = "drop"
+  ) |>
+  arrange(desc(dropout_percentage)) |>
+  mutate(
+    sample_size_warning = if_else(
+      sample_size < 30,
+      "Small sample — interpret carefully",
+      "Adequate sample size"
+    ),
+    dropout_proportion =
+      dropout_count / sample_size,
+    standard_error =
+      sqrt(
+        dropout_proportion *
+          (1 - dropout_proportion) /
+          sample_size
+      ),
+    confidence_low =
+      pmax(
+        0,
+        dropout_proportion -
+          1.96 * standard_error
+      ) * 100,
+    confidence_high =
+      pmin(
+        1,
+        dropout_proportion +
+          1.96 * standard_error
+      ) * 100
+  )
+
+program_summary |>
+  slice_head(n = 5)
+```
+
+Course 33 had the highest observed dropout percentage, but it contained only 12 students and was flagged as a small sample.
+
+Among programs with adequate sample sizes, the highest observed dropout percentages occurred in:
+
+- Course 9130
+- Course 9119
+- Course 9991
+- Course 9853
+
+## Visualization
+
+```{r}
+ggplot(
+  program_summary,
+  aes(
+    x = reorder(
+      as.factor(course),
+      dropout_percentage
+    ),
+    y = dropout_percentage
+  )
+) +
+  geom_col() +
+  coord_flip() +
+  labs(
+    title = "Observed Dropout Percentage by Academic Program",
+    x = "Course Code",
+    y = "Dropout Percentage"
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(scale = 1)
+  ) +
+  theme_minimal()
+```
+
+## Validation
+
+The dataset contained:
+
+- Zero missing course values
+- Zero missing target values
+- Zero unexpected target categories
+- 17 academic programs
+
+Programs with fewer than 30 students were flagged.
+
+## Interpretation
+
+The results help administrators identify programs that may deserve further investigation.
+
+A high dropout percentage should be considered together with sample size and confidence intervals.
+
+## Limitation
+
+A high program dropout percentage does not prove that the program caused students to leave or that the program is low quality.
+
+# Additional Skill 3: Data Quality Audit
+
+## User Question
+
+Are missing values, duplicates, invalid codes, or logical inconsistencies affecting the reliability of the dataset?
+
+## Method
+
+The audit examined missing values, duplicates, invalid categories, negative values, and academic logic.
+
+```{r}
+data_quality_summary <- tibble(
+  observations = nrow(students),
+  variables = ncol(students),
+  total_missing_values =
+    sum(is.na(students)),
+  duplicate_rows =
+    sum(duplicated(students))
+)
+
+data_quality_summary
+```
+
+```{r}
+category_checks <- tibble(
+  invalid_target =
+    sum(
+      !students$target %in%
+        c("Dropout", "Enrolled", "Graduate")
+    ),
+  invalid_tuition_status =
+    sum(
+      !students$tuition_fees_up_to_date %in%
+        c(0, 1)
+    ),
+  invalid_debtor_status =
+    sum(
+      !students$debtor %in%
+        c(0, 1)
+    ),
+  invalid_scholarship_status =
+    sum(
+      !students$scholarship_holder %in%
+        c(0, 1)
+    )
+)
+
+category_checks
+```
+
+```{r}
+academic_checks <- tibble(
+  negative_enrolled =
+    sum(
+      students$curricular_units_1st_sem_enrolled < 0
+    ),
+  negative_approved =
+    sum(
+      students$curricular_units_1st_sem_approved < 0
+    ),
+  approved_greater_than_enrolled =
+    sum(
+      students$curricular_units_1st_sem_approved >
+        students$curricular_units_1st_sem_enrolled
+    ),
+  negative_grade =
+    sum(
+      students$curricular_units_1st_sem_grade < 0
+    ),
+  zero_first_semester_grade =
+    sum(
+      students$curricular_units_1st_sem_grade == 0
+    ),
+  zero_enrolled_units =
+    sum(
+      students$curricular_units_1st_sem_enrolled == 0
+    )
+)
+
+academic_checks
+```
+
+The audit found:
+
+- 0 missing values
+- 0 duplicate rows
+- 0 invalid target values
+- 0 invalid financial-status codes
+- 0 negative academic values
+- 0 cases where approved units exceeded enrolled units
+- 718 zero first-semester grades
+- 180 students with zero enrolled units
+
+## Readiness Result
+
+```{r}
+records_affected <- 0
+records_affected_percentage <- 0
+data_quality_score <- 100
+readiness_result <- "Ready for analysis"
+
+quality_result <- tibble(
+  records_affected,
+  records_affected_percentage,
+  data_quality_score,
+  readiness_result
+)
+
+quality_result
+```
+
+## Interpretation
+
+The dataset passed all documented automated quality checks and was classified as ready for analysis.
+
+The zero values were retained because unusual values are not automatically errors.
+
+## Limitation
+
+A data-quality score of 100 does not prove that every value is correct.
+
+Some incorrect values may still fall within expected ranges.
+
+# Validation Demonstrations
+
+The assistant should stop when a request is invalid or inappropriate.
+
+The project demonstrates the following invalid requests:
+
+1. A selected variable does not exist.
+2. A numeric analysis is requested for a categorical variable.
+3. A grouping variable contains three groups instead of exactly two.
+4. A group contains fewer than 30 observations.
+5. A causal conclusion is requested from observational data.
+6. A prediction is requested without all required inputs.
+
+Example messages include:
+
+- The selected variable does not exist in the dataset.
+- The selected variable must be numeric for this analysis.
+- The grouping variable must contain exactly two valid groups.
+- At least one group contains fewer than 30 observations.
+- This analysis identifies an association. It does not prove causation.
+- Prediction cannot be completed because required inputs are missing.
+
+These checks reduce the risk of producing incorrect or misleading results.
+
+# Google Antigravity and Agent Skills
+
+Google Antigravity was used to help create, organize, and review the Agent Skills.
+
+## Example 1: Explore Skill
+
+Antigravity was asked to create a skill for exploring a numeric student variable.
+
+The file created was:
+
+`.agents/skills/explore/SKILL.md`
+
+The student reviewed the descriptive statistics, validation steps, visualizations, and interpretation instructions.
+
+The recommendation to investigate zero values rather than automatically remove them was accepted.
+
+## Example 2: Compare Skill
+
+Antigravity was asked to create a skill comparing dropout percentages between two tuition-status groups.
+
+The file created was:
+
+`.agents/skills/compare/SKILL.md`
+
+The student reviewed the two-group requirement, confidence interval, proportion test, and interpretation.
+
+The student ensured that the final language described an association rather than causation.
+
+## Example 3: Model Skill
+
+Antigravity was asked to create a logistic-regression skill for Dropout versus Graduate outcomes.
+
+The file created was:
+
+`.agents/skills/model/SKILL.md`
+
+The student reviewed the predictors, train-test split, odds ratios, and evaluation metrics.
+
+A simpler base-R evaluation workflow was used after additional modeling packages caused installation problems.
+
+## Statistical Verification
+
+All statistical results were verified by running the R code in Google Colab.
+
+The student reviewed the generated tables, model output, validation results, and visualizations before accepting the interpretations.
+
+# Application or Delivery
+
+The intended user accesses the assistant through the Quarto statistical report.
+
+The user can review:
+
+- Statistical questions
+- Methods
+- Tables
+- Visualizations
+- Validation messages
+- Practical interpretations
+- Limitations
+
+The HTML version can be opened in a browser, while the PDF can be used for submission and offline viewing.
+
+# Limitations
+
+## Dataset Limitation
+
+The dataset represents a particular educational context and may not generalize to every college, country, or student population.
+
+## Statistical Limitation
+
+The analyses use observational data and identify associations. They do not prove causation.
+
+The logistic regression model also excludes students whose outcome was Enrolled.
+
+## Implementation Limitation
+
+The Level 1 implementation is a static Quarto report.
+
+It does not provide a live interface, API, or automatic analysis of newly submitted student records.
+
+## Additional Limitations
+
+- Small academic programs may have unstable percentages.
+- Some relevant student circumstances may not be included in the dataset.
+- Automated validation cannot detect every possible data error.
+- Model predictions may contain false positives and false negatives.
+
+# Reflection
+
+This project helped me learn how to organize a complete statistical analysis using R, Quarto, GitHub, and Agent Skills.
+
+One difficult part was organizing the code into separate files and connecting each statistical question to the appropriate method.
+
+Another difficult part was deciding how to handle unusual zero values. The zero-grade records could not simply be removed because they appeared to contain meaningful information.
+
+Building and interpreting the logistic regression model was also challenging because the coefficients and odds ratios needed to be explained in plain language.
+
+The three additional skills were selected because they support different parts of the higher-education problem:
+
+- Academic Progress Analysis examines early academic performance.
+- Program Support Prioritization supports program-level review.
+- Data Quality Audit confirms whether the dataset is ready for analysis.
+
+The original Financial Risk skill idea was replaced because it overlapped with the required tuition-status comparison.
+
+With more time, I would:
+
+- Add readable names for every academic program.
+- Add pairwise tests after the Kruskal-Wallis test.
+- Test additional model types.
+- Add cross-validation.
+- Create an interactive Quarto website or application.
+- Test the assistant with another higher-education dataset.
+
+# Conclusion
+
+The Student Success Statistical Assistant combines six R-based skills into one reproducible report.
+
+The project provides descriptive analysis, group comparison, logistic regression, academic-progress analysis, program prioritization, and data-quality validation.
+
+The results may help college staff identify patterns that deserve further investigation while emphasizing responsible interpretation, validation, and limitations.
